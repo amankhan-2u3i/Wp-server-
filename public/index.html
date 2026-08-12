@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AMAN – WhatsApp Arsenal</title>
+  <style>
+    /* ================================================================
+       RESET & BASE
+    ================================================================ */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0a0a0a;
+      font-family: 'Arial Black', sans-serif;
+      overflow: hidden;
+      position: relative;
+      padding: 20px;
+    }
+    #bgCanvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ================================================================
+       PIN LOCK SCREEN (Main PIN: 8075)
+    ================================================================ */
+    #pinScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6,10,18,0.97);
+      backdrop-filter: blur(30px);
+    }
+    #pinScreen.hide { display: none; }
+    .pin-container {
+      width: 100%;
+      max-width: 380px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 32px;
+      padding: 40px 28px 32px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+      text-align: center;
+      animation: fadeUp 0.4s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(24px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+    .pin-lock-icon { font-size: 48px; margin-bottom: 12px; }
+    .pin-title { font-size: 1.3rem; font-weight: 700; letter-spacing: 1px; color: #fff; }
+    .pin-sub { font-size: 0.75rem; color: rgba(255,255,255,0.45); margin-top: 4px; }
+    .pin-dots {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin: 28px 0 18px;
+    }
+    .pin-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.12);
+      border: 2px solid rgba(255,255,255,0.08);
+      transition: all 0.25s;
+    }
+    .pin-dot.filled {
+      background: #25d366;
+      border-color: #25d366;
+      box-shadow: 0 0 16px rgba(37,211,102,0.4);
+    }
+    .pin-dot.error {
+      background: #ff5c5c;
+      border-color: #ff5c5c;
+      box-shadow: 0 0 16px rgba(255,92,92,0.4);
+    }
+    .pin-error {
+      font-size: 0.75rem;
+      color: #ff5c5c;
+      min-height: 24px;
+      margin-bottom: 8px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .pin-error.show { opacity: 1; }
+    .pin-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 12px 0 20px;
+    }
+    .pin-key {
+      padding: 16px;
+      border: none;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: 1.5rem;
+      font-weight: 600;
+      font-family: 'Arial Black', sans-serif;
+      cursor: pointer;
+      transition: all 0.15s;
+      backdrop-filter: blur(10px);
+    }
+    .pin-key:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.2);
+      transform: scale(1.02);
+    }
+    .pin-key:active {
+      transform: scale(0.95);
+      background: rgba(37,211,102,0.15);
+    }
+    .pin-key.empty {
+      background: transparent;
+      border: none;
+      cursor: default;
+    }
+    .pin-key.empty:hover { background: transparent; transform: none; }
+    .pin-key.delete { font-size: 1.1rem; color: rgba(255,255,255,0.45); }
+    .pin-footer {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.45);
+    }
+    .pin-footer a {
+      color: #25d366;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .pin-footer a:hover { color: #a8ffcb; text-decoration: underline; }
+    .pin-footer .owner-label {
+      display: block;
+      margin-top: 6px;
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.2);
+    }
+
+    /* ================================================================
+       3-LINE MENU (Top-Right)
+    ================================================================ */
+    .menu-toggle {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 100;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      backdrop-filter: blur(20px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .menu-toggle:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.2);
+    }
+    .menu-toggle span {
+      display: block;
+      width: 20px;
+      height: 2px;
+      background: #fff;
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+    .menu-toggle .line1 { width: 20px; }
+    .menu-toggle .line2 { width: 14px; }
+    .menu-toggle .line3 { width: 18px; }
+
+    /* ================================================================
+       ADMIN PIN OVERLAY (Admin PIN: 7860)
+    ================================================================ */
+    #adminPinOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(6,10,18,0.97);
+      backdrop-filter: blur(30px);
+    }
+    #adminPinOverlay.show { display: flex; }
+
+    /* ================================================================
+       ADMIN DASHBOARD
+    ================================================================ */
+    #adminDashboard {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      display: none;
+      background: rgba(6,10,18,0.98);
+      backdrop-filter: blur(30px);
+      padding: 20px;
+      overflow-y: auto;
+    }
+    #adminDashboard.show { display: block; }
+    .admin-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 20px;
+    }
+    .admin-header h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fbbf24;
+    }
+    .admin-header .close-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 6px 14px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-family: 'Arial', sans-serif;
+    }
+    .admin-header .close-btn:hover { background: rgba(255,255,255,0.12); }
+    .admin-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .admin-stat-box {
+      padding: 14px;
+      text-align: center;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+    }
+    .admin-stat-box .num {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: #25d366;
+    }
+    .admin-stat-box .lbl {
+      font-size: 0.6rem;
+      color: rgba(255,255,255,0.45);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+    .admin-user-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+    }
+    .admin-user-card .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .admin-user-card .user-info { flex: 1; min-width: 0; }
+    .admin-user-card .user-info .name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+    .admin-user-card .user-info .detail {
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.45);
+    }
+    .admin-user-card .user-info .last-msg {
+      font-size: 0.7rem;
+      color: #fbbf24;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .admin-user-card .actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .admin-user-card .actions button {
+      padding: 4px 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      font-family: 'Arial', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .admin-user-card .actions .btn-log {
+      background: rgba(96,165,250,0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(96,165,250,0.2);
+    }
+    .admin-user-card .actions .btn-log:hover { background: rgba(96,165,250,0.25); }
+    .admin-user-card .actions .btn-stop {
+      background: rgba(255,92,92,0.15);
+      color: #ff5c5c;
+      border: 1px solid rgba(255,92,92,0.2);
+    }
+    .admin-user-card .actions .btn-stop:hover { background: rgba(255,92,92,0.25); }
+
+    /* ================================================================
+       LOG POPUP
+    ================================================================ */
+    #logPopup {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      display: none;
+      background: rgba(6,10,18,0.97);
+      backdrop-filter: blur(30px);
+      padding: 24px;
+      overflow-y: auto;
+    }
+    #logPopup.show { display: block; }
+    .log-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 16px;
+    }
+    .log-popup-header h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .log-popup-header .close-log {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 6px 14px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-family: 'Arial', sans-serif;
+    }
+    .log-entry {
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.8rem;
+      font-family: monospace;
+      color: rgba(255,255,255,0.7);
+    }
+    .log-entry .time { color: rgba(255,255,255,0.45); margin-right: 10px; }
+    .log-entry .msg { color: #25d366; }
+
+    /* ================================================================
+       MAIN BOX – AMAN DISPLAY
+    ================================================================ */
+    .main-wrapper {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 30px;
+    }
+
+    .main-box {
+      position: relative;
+      width: 420px;
+      height: 420px;
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10,10,20,0.85);
+      backdrop-filter: blur(20px);
+      border: 3px solid rgba(255,255,255,0.1);
+      box-shadow: 0 0 60px rgba(0,0,0,0.8), inset 0 0 60px rgba(255,255,255,0.02);
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-12px) scale(1.02); }
+    }
+    .light-ring {
+      position: absolute;
+      inset: -18px;
+      border-radius: 50%;
+      z-index: -1;
+      animation: spinLight 8s linear infinite;
+      background: conic-gradient(from 0deg,#ff0066,#ff6600,#ffcc00,#00ff66,#0066ff,#cc00ff,#ff0066);
+      opacity: 0.6;
+      filter: blur(12px);
+    }
+    .light-ring-2 {
+      position: absolute;
+      inset: -35px;
+      border-radius: 50%;
+      z-index: -2;
+      animation: spinLight 12s linear infinite reverse;
+      background: conic-gradient(from 90deg,#00ffff,#ff00ff,#ffff00,#00ff88,#ff4400,#8800ff,#00ffff);
+      opacity: 0.35;
+      filter: blur(25px);
+    }
+    .light-ring-3 {
+      position: absolute;
+      inset: -55px;
+      border-radius: 50%;
+      z-index: -3;
+      animation: spinLight 16s linear infinite;
+      background: conic-gradient(from 180deg,#ff0088,#88ff00,#0088ff,#ff8800,#ff00ff,#00ff88,#ff0088);
+      opacity: 0.2;
+      filter: blur(40px);
+    }
+    @keyframes spinLight {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .corner-dots {
+      position: absolute;
+      inset: -10px;
+      border-radius: 50%;
+      z-index: 0;
+    }
+    .dot {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 30px currentColor;
+      animation: pulseDot 1.8s ease-in-out infinite alternate;
+    }
+    .dot:nth-child(1) { top: -8px; left:50%; transform:translateX(-50%); color:#ff0066; background:#ff0066; animation-delay:0s; }
+    .dot:nth-child(2) { bottom: -8px; left:50%; transform:translateX(-50%); color:#00ff66; background:#00ff66; animation-delay:0.6s; }
+    .dot:nth-child(3) { left: -8px; top:50%; transform:translateY(-50%); color:#0066ff; background:#0066ff; animation-delay:1.2s; }
+    .dot:nth-child(4) { right: -8px; top:50%; transform:translateY(-50%); color:#ffcc00; background:#ffcc00; animation-delay:0.3s; }
+    .dot:nth-child(5) { top:15%; left:-12px; color:#ff00ff; background:#ff00ff; animation-delay:0.9s; width:10px; height:10px; }
+    .dot:nth-child(6) { top:15%; right:-12px; color:#00ffff; background:#00ffff; animation-delay:0.4s; width:10px; height:10px; }
+    .dot:nth-child(7) { bottom:15%; left:-12px; color:#ff8800; background:#ff8800; animation-delay:1.5s; width:10px; height:10px; }
+    .dot:nth-child(8) { bottom:15%; right:-12px; color:#88ff00; background:#88ff00; animation-delay:0.7s; width:10px; height:10px; }
+    @keyframes pulseDot {
+      0% { transform: scale(0.6); opacity:0.4; box-shadow:0 0 15px currentColor; }
+      100% { transform: scale(1.4); opacity:1; box-shadow:0 0 50px currentColor; }
+    }
+    .aman-text {
+      font-size: 6.5rem;
+      font-weight: 900;
+      letter-spacing: 12px;
+      background: linear-gradient(90deg,#ff0066,#ffcc00,#00ff66,#0066ff,#cc00ff,#ff0066);
+      background-size: 300% 100%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: gradientMove 4s linear infinite;
+      user-select: none;
+      filter: drop-shadow(0 0 40px rgba(255,0,102,0.3));
+    }
+    @keyframes gradientMove {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 300% 50%; }
+    }
+    .sub-text {
+      color: rgba(255,255,255,0.25);
+      font-size: 0.7rem;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      margin-top: 4px;
+      font-family: 'Arial', sans-serif;
+    }
+
+    /* ================================================================
+       WHATSAPP CONNECT BUTTON (Below AMAN)
+    ================================================================ */
+    .connect-btn-wrap {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+      z-index: 2;
+    }
+    .connect-btn-wrap .btn {
+      padding: 14px 32px;
+      border: none;
+      border-radius: 16px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: 'Arial', sans-serif;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      backdrop-filter: blur(10px);
+    }
+    .connect-btn-wrap .btn-green {
+      background: linear-gradient(135deg, #25d366, #128c7e);
+      color: #fff;
+      box-shadow: 0 4px 25px rgba(37,211,102,0.35);
+    }
+    .connect-btn-wrap .btn-green:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 35px rgba(37,211,102,0.5);
+    }
+
+    /* ================================================================
+       SONG PLAYER – BOTTOM-RIGHT CORNER (FIXED)
+    ================================================================ */
+    .song-player-corner {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 100;
+      background: rgba(10,10,20,0.85);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 14px 18px;
+      min-width: 200px;
+      max-width: 260px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .song-player-corner .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .song-player-corner .header .title {
+      color: rgba(255,255,255,0.3);
+      font-size: 0.55rem;
+      font-family: 'Arial', sans-serif;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .song-player-corner .header .now-playing {
+      color: rgba(255,255,255,0.5);
+      font-size: 0.6rem;
+      font-family: 'Arial', sans-serif;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+    }
+    .song-player-corner .header .now-playing span { color: #25d366; }
+    .song-player-corner .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .song-player-corner .song-btn {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 4px 10px;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.6rem;
+      font-family: 'Arial', sans-serif;
+      cursor: pointer;
+      transition: all 0.25s;
+      flex: 1;
+      min-width: 32px;
+      text-align: center;
+    }
+    .song-player-corner .song-btn:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.2);
+      color: #fff;
+    }
+    .song-player-corner .song-btn.active {
+      background: rgba(37,211,102,0.15);
+      border-color: #25d366;
+      color: #25d366;
+      box-shadow: 0 0 15px rgba(37,211,102,0.1);
+    }
+    .song-player-corner .song-btn .num {
+      color: rgba(255,255,255,0.15);
+      font-size: 0.5rem;
+    }
+    .song-player-corner .link-settings {
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+    .song-player-corner .link-settings.open { display: flex; }
+    .song-player-corner .link-settings .l-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .song-player-corner .link-settings .l-row label {
+      color: rgba(255,255,255,0.15);
+      font-size: 0.5rem;
+      font-family: 'Arial', sans-serif;
+      min-width: 16px;
+    }
+    .song-player-corner .link-settings .l-row input {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 4px;
+      color: rgba(255,255,255,0.6);
+      font-size: 0.5rem;
+      font-family: 'Arial', sans-serif;
+      outline: none;
+      padding: 2px 6px;
+      flex: 1;
+      min-width: 60px;
+    }
+    .song-player-corner .link-settings .l-row input:focus {
+      border-color: rgba(37,211,102,0.3);
+      color: #fff;
+    }
+    .song-player-corner .link-settings .update-btn {
+      background: rgba(37,211,102,0.1);
+      border: 1px solid rgba(37,211,102,0.15);
+      border-radius: 6px;
+      padding: 3px 10px;
+      color: #25d366;
+      font-size: 0.5rem;
+      font-family: 'Arial', sans-serif;
+      cursor: pointer;
+      transition: all 0.2s;
+      align-self: flex-end;
+      margin-top: 2px;
+    }
+    .song-player-corner .link-settings .update-btn:hover { background: rgba(37,211,102,0.2); }
+    .song-player-corner .toggle-links {
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.15);
+      font-size: 0.5rem;
+      font-family: 'Arial', sans-serif;
+      cursor: pointer;
+      padding: 2px 6px;
+      align-self: flex-end;
+    }
+    .song-player-corner .toggle-links:hover { color: rgba(255,255,255,0.4); }
+
+    /* ================================================================
+       WHATSAPP TOOL – FULL SCREEN OVERLAY
+    ================================================================ */
+    #whatsappTool {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(6,10,18,0.98);
+      backdrop-filter: blur(30px);
+      padding: 20px;
+      overflow-y: auto;
+    }
+    #whatsappTool.show { display: block; }
+    .wtool-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      margin-bottom: 20px;
+    }
+    .wtool-header h2 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #25d366;
+    }
+    .wtool-header .close-wtool {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 6px 14px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-family: 'Arial', sans-serif;
+    }
+    .wtool-header .close-wtool:hover { background: rgba(255,255,255,0.12); }
+    .wtool-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 16px;
+      backdrop-filter: blur(10px);
+    }
+    .wtool-card .flbl {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,0.45);
+      margin-bottom: 6px;
+    }
+    .wtool-card .finput {
+      width: 100%;
+      padding: 14px 18px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-family: 'Arial', sans-serif;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .wtool-card .finput:focus {
+      border-color: rgba(37,211,102,0.5);
+      background: rgba(37,211,102,0.07);
+    }
+    .wtool-card .finput::placeholder { color: rgba(255,255,255,0.2); }
+    .wtool-card .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-family: 'Arial', sans-serif;
+      cursor: pointer;
+      transition: all 0.25s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .wtool-card .btn-green {
+      background: linear-gradient(135deg, #25d366, #128c7e);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(37,211,102,0.35);
+    }
+    .wtool-card .btn-green:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(37,211,102,0.5); }
+    .wtool-card .btn-red {
+      background: linear-gradient(135deg, #c0392b, #e74c3c);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(231,76,60,0.35);
+    }
+    .wtool-card .btn-red:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(231,76,60,0.5); }
+    .wtool-card .btn-ghost {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #25d366;
+      padding: 10px 16px;
+      font-size: 0.8rem;
+    }
+    .wtool-card .btn-ghost:hover { background: rgba(37,211,102,0.1); }
+    .wtool-card .fg { margin-bottom: 16px; }
+    .wtool-card .result-box {
+      display: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 0.85rem;
+      margin-top: 12px;
+    }
+    .wtool-card .result-box.show { display: block; }
+    .wtool-card .result-box.success { background: rgba(37,211,102,0.08); border: 1px solid rgba(37,211,102,0.2); color: #a7f3d0; }
+    .wtool-card .result-box.error { background: rgba(255,92,92,0.08); border: 1px solid rgba(255,92,92,0.2); color: #fca5a5; }
+    .wtool-card .result-box.info { background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2); color: #bfdbfe; }
+    .wtool-card .pair-box {
+      text-align: center;
+      padding: 20px;
+      background: rgba(37,211,102,0.05);
+      border: 1.5px dashed rgba(37,211,102,0.35);
+      border-radius: 14px;
+      margin: 10px 0;
+    }
+    .wtool-card .pair-code {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: 8px;
+      color: #25d366;
+      text-shadow: 0 0 24px rgba(37,211,102,0.5);
+    }
+    .wtool-card .key-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin: 6px 0;
+    }
+    .wtool-card .key-val {
+      flex: 1;
+      font-family: monospace;
+      font-size: 0.7rem;
+      word-break: break-all;
+      color: #25d366;
+    }
+    .wtool-card .copy-btn {
+      background: rgba(37,211,102,0.12);
+      border: 1px solid rgba(37,211,102,0.2);
+      border-radius: 6px;
+      color: #25d366;
+      font-size: 0.65rem;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-family: 'Arial', sans-serif;
+    }
+    .wtool-card .copy-btn:hover { background: rgba(37,211,102,0.2); }
+    .wtool-card .spin-wrap { display: none; padding: 20px 0; text-align: center; }
+    .wtool-card .spin-wrap.on { display: block; }
+    .wtool-card .spin-ring {
+      display: inline-block;
+      width: 36px;
+      height: 36px;
+      border: 2.5px solid rgba(37,211,102,0.12);
+      border-top-color: #25d366;
+      border-radius: 50%;
+      animation: rot 0.7s linear infinite;
+    }
+    @keyframes rot { to { transform: rotate(360deg); } }
+    .wtool-card .spin-txt { margin-top: 8px; font-size: 0.75rem; color: rgba(255,255,255,0.45); }
+    .wtool-card .file-drop {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 16px;
+      background: rgba(255,255,255,0.04);
+      border: 1.5px dashed rgba(255,255,255,0.12);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.25s;
+    }
+    .wtool-card .file-drop:hover {
+      border-color: rgba(37,211,102,0.4);
+      background: rgba(37,211,102,0.06);
+    }
+    .wtool-card .file-drop-ic { font-size: 22px; }
+    .wtool-card .file-drop-txt { font-size: 0.75rem; color: rgba(255,255,255,0.45); }
+    .wtool-card .file-drop-name { font-size: 0.7rem; color: #25d366; }
+    .wtool-card input[type=file] { display: none; }
+    .wtool-card .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .wtool-card .stat-box {
+      padding: 12px 6px;
+      text-align: center;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+    }
+    .wtool-card .stat-box .stat-num { font-size: 1.3rem; font-weight: 800; line-height: 1; }
+    .wtool-card .stat-box .stat-lbl {
+      font-size: 0.55rem;
+      color: rgba(255,255,255,0.45);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 3px;
+    }
+    .wtool-card .stat-box.sg .stat-num { color: #25d366; }
+    .wtool-card .stat-box.sr .stat-num { color: #ff5c5c; }
+    .wtool-card .stat-box.sb .stat-num { color: #93c5fd; }
+    .wtool-card .live-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(37,211,102,0.06);
+      border: 1px solid rgba(37,211,102,0.15);
+      border-radius: 10px;
+    }
+    .wtool-card .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #25d366;
+      box-shadow: 0 0 7px #25d366;
+      animation: blink 1.2s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+    .wtool-card .live-txt { font-size: 0.7rem; font-weight: 600; color: #25d366; }
+    .wtool-card .live-msg {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.45);
+      margin-left: auto;
+      max-width: 50%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .wtool-card .hdiv { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 18px 0; }
+
+    /* ================================================================
+       RESPONSIVE
+    ================================================================ */
+    @media (max-width: 520px) {
+      .main-box { width: 300px; height: 300px; }
+      .aman-text { font-size: 4.2rem; letter-spacing: 8px; }
+      .light-ring { inset: -12px; }
+      .light-ring-2 { inset: -25px; }
+      .light-ring-3 { inset: -40px; }
+      .dot { width: 10px; height: 10px; }
+      .dot:nth-child(5),.dot:nth-child(6),.dot:nth-child(7),.dot:nth-child(8) { display: none; }
+      .song-player-corner {
+        bottom: 12px;
+        right: 12px;
+        padding: 10px 12px;
+        min-width: 160px;
+        max-width: 200px;
+      }
+      .song-player-corner .song-btn { font-size: 0.5rem; padding: 3px 6px; }
+      .song-player-corner .header .now-playing { max-width: 80px; font-size: 0.5rem; }
+      .admin-stats { grid-template-columns: 1fr 1fr; }
+      .wtool-card { padding: 16px; }
+      .connect-btn-wrap .btn { padding: 10px 20px; font-size: 0.85rem; }
+    }
+    @media (max-width: 400px) {
+      .main-box { width: 220px; height: 220px; }
+      .aman-text { font-size: 3rem; letter-spacing: 5px; }
+      .song-player-corner {
+        bottom: 8px;
+        right: 8px;
+        padding: 8px 10px;
+        min-width: 130px;
+        max-width: 170px;
+      }
+      .song-player-corner .song-btn { font-size: 0.45rem; padding: 2px 5px; min-width: 24px; }
+      .song-player-corner .header .now-playing { max-width: 60px; font-size: 0.45rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     BACKGROUND CANVAS
+================================================================ -->
+<canvas id="bgCanvas"></canvas>
+
+<!-- ================================================================
+     PIN LOCK SCREEN (Main PIN: 8075)
+================================================================ -->
+<div id="pinScreen">
+  <div class="pin-container">
+    <div class="pin-lock-icon">🔐</div>
+    <div class="pin-title">Set screen lock</div>
+    <div class="pin-sub">PIN must be at least 4 digits</div>
+    <div class="pin-dots" id="pinDots">
+      <span class="pin-dot" data-i="0"></span>
+      <span class="pin-dot" data-i="1"></span>
+      <span class="pin-dot" data-i="2"></span>
+      <span class="pin-dot" data-i="3"></span>
+    </div>
+    <div class="pin-error" id="pinError">❌ Invalid PIN. Try again.</div>
+    <div class="pin-grid" id="pinGrid">
+      <button class="pin-key" data-value="1">1</button>
+      <button class="pin-key" data-value="2">2</button>
+      <button class="pin-key" data-value="3">3</button>
+      <button class="pin-key" data-value="4">4</button>
+      <button class="pin-key" data-value="5">5</button>
+      <button class="pin-key" data-value="6">6</button>
+      <button class="pin-key" data-value="7">7</button>
+      <button class="pin-key" data-value="8">8</button>
+      <button class="pin-key" data-value="9">9</button>
+      <button class="pin-key empty"></button>
+      <button class="pin-key" data-value="0">0</button>
+      <button class="pin-key delete" data-value="delete">⌫</button>
+    </div>
+    <div class="pin-footer">
+      <a href="https://wa.me/918075498750" target="_blank">📱 Owner Contact</a>
+      <span class="owner-label">+91 8075498750</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     3-LINE MENU (Top-Right)
+================================================================ -->
+<div class="menu-toggle" id="menuToggle" title="Admin Menu">
+  <span class="line1"></span>
+  <span class="line2"></span>
+  <span class="line3"></span>
+</div>
+
+<!-- ================================================================
+     ADMIN PIN OVERLAY (Admin PIN: 7860)
+================================================================ -->
+<div id="adminPinOverlay">
+  <div class="pin-container">
+    <div class="pin-lock-icon">👑</div>
+    <div class="pin-title">Admin Access</div>
+    <div class="pin-sub">Enter admin PIN to continue</div>
+    <div class="pin-dots" id="adminPinDots">
+      <span class="pin-dot" data-i="0"></span>
+      <span class="pin-dot" data-i="1"></span>
+      <span class="pin-dot" data-i="2"></span>
+      <span class="pin-dot" data-i="3"></span>
+    </div>
+    <div class="pin-error" id="adminPinError">❌ Invalid PIN. Try again.</div>
+    <div class="pin-grid" id="adminPinGrid">
+      <button class="pin-key" data-value="1">1</button>
+      <button class="pin-key" data-value="2">2</button>
+      <button class="pin-key" data-value="3">3</button>
+      <button class="pin-key" data-value="4">4</button>
+      <button class="pin-key" data-value="5">5</button>
+      <button class="pin-key" data-value="6">6</button>
+      <button class="pin-key" data-value="7">7</button>
+      <button class="pin-key" data-value="8">8</button>
+      <button class="pin-key" data-value="9">9</button>
+      <button class="pin-key empty"></button>
+      <button class="pin-key" data-value="0">0</button>
+      <button class="pin-key delete" data-value="delete">⌫</button>
+    </div>
+    <div class="pin-footer"><span style="color:#fbbf24;">🔐 Admin Only</span></div>
+  </div>
+</div>
+
+<!-- ================================================================
+     ADMIN DASHBOARD
+================================================================ -->
+<div id="adminDashboard">
+  <div class="admin-header">
+    <h2>👑 Admin Dashboard</h2>
+    <button class="close-btn" onclick="closeAdmin()">✕ Close</button>
+  </div>
+  <div class="admin-stats">
+    <div class="admin-stat-box"><div class="num" id="adminTotalUsers">0</div><div class="lbl">Total Users</div></div>
+    <div class="admin-stat-box"><div class="num" id="adminTotalSent">0</div><div class="lbl">Total Messages Sent</div></div>
+    <div class="admin-stat-box"><div class="num" id="adminActiveSessions">0</div><div class="lbl">Active Sessions</div></div>
+  </div>
+  <div id="adminUserList"></div>
+</div>
+
+<!-- ================================================================
+     LOG POPUP
+================================================================ -->
+<div id="logPopup">
+  <div class="log-popup-header">
+    <h3>📋 Live Logs: <span id="logUserName">User</span></h3>
+    <button class="close-log" onclick="closeLog()">✕ Close</button>
+  </div>
+  <div id="logEntries"></div>
+</div>
+
+<!-- ================================================================
+     MAIN WRAPPER – AMAN DISPLAY + CONNECT BUTTON
+================================================================ -->
+<div class="main-wrapper" id="mainWrapper">
+  <div class="main-box">
+    <div class="light-ring"></div>
+    <div class="light-ring-2"></div>
+    <div class="light-ring-3"></div>
+    <div class="corner-dots">
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+    <div class="aman-text">AMAN</div>
+    <div class="sub-text">✦ Your Name ✦</div>
+  </div>
+
+  <!-- WHATSAPP CONNECT BUTTON -->
+  <div class="connect-btn-wrap">
+    <button class="btn btn-green" onclick="openWtool()">
+      🔗 Connect WhatsApp
+    </button>
+  </div>
+</div>
+
+<!-- ================================================================
+     SONG PLAYER – BOTTOM-RIGHT CORNER (FIXED)
+================================================================ -->
+<div class="song-player-corner" id="songPlayer">
+  <div class="header">
+    <span class="title">🎵 MUSIC</span>
+    <span class="now-playing" id="nowPlaying"><span id="songName">Select</span></span>
+  </div>
+  <div class="btn-row">
+    <button class="song-btn" data-song="1"><span class="num">1</span> 🎵</button>
+    <button class="song-btn" data-song="2"><span class="num">2</span> 🎵</button>
+    <button class="song-btn" data-song="3"><span class="num">3</span> 🎵</button>
+    <button class="song-btn" data-song="4"><span class="num">4</span> 🎵</button>
+    <button class="song-btn" data-song="5"><span class="num">5</span> 🎵</button>
+  </div>
+  <button class="toggle-links" id="toggleLinks">⚙️ Edit Links</button>
+  <div class="link-settings" id="linkSettings">
+    <div class="l-row"><label>1.</label><input type="text" id="link1" placeholder="MP3 URL" value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" /></div>
+    <div class="l-row"><label>2.</label><input type="text" id="link2" placeholder="MP3 URL" value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" /></div>
+    <div class="l-row"><label>3.</label><input type="text" id="link3" placeholder="MP3 URL" value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" /></div>
+    <div class="l-row"><label>4.</label><input type="text" id="link4" placeholder="MP3 URL" value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3" /></div>
+    <div class="l-row"><label>5.</label><input type="text" id="link5" placeholder="MP3 URL" value="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3" /></div>
+    <button class="update-btn" id="updateLinksBtn">⟳ Update Links</button>
+  </div>
+</div>
+
+<!-- ================================================================
+     WHATSAPP TOOL – FULL SCREEN OVERLAY
+================================================================ -->
+<div id="whatsappTool">
+  <div class="wtool-header">
+    <h2>💬 WhatsApp Tool</h2>
+    <button class="close-wtool" onclick="closeWtool()">✕ Close</button>
+  </div>
+
+  <!-- Connect Card -->
+  <div class="wtool-card">
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:18px;">
+      <div style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.2);">📱</div>
+      <div><div style="font-weight:700;font-size:1rem;">Connect WhatsApp</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.45);">Link your account using a pairing code</div></div>
+    </div>
+    <form id="loginFormWA">
+      <div class="fg">
+        <label class="flbl">Phone Number (with country code)</label>
+        <input type="text" id="phoneNumber" class="finput" placeholder="e.g. 91987xxxxx" required />
+      </div>
+      <button type="submit" class="btn btn-green" id="loginBtnWA"><span>🔗</span> Connect WhatsApp</button>
+    </form>
+    <div class="spin-wrap" id="loginSpinner"><div class="spin-ring"></div><div class="spin-txt">Connecting…</div></div>
+    <div class="result-box" id="loginResultWA"></div>
+  </div>
+
+  <!-- Messaging Card (hidden until connected) -->
+  <div class="wtool-card" id="messagingCard" style="display:none;">
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:18px;">
+      <div style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.2);">🚀</div>
+      <div><div style="font-weight:700;font-size:1rem;">Start Automation</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.45);">Configure and launch your message blast</div></div>
+    </div>
+    <form id="messagingForm">
+      <div class="fg">
+        <label class="flbl">Target (Group ID or Phone Number)</label>
+        <input type="text" id="target" class="finput" placeholder="e.g. 120363XXXXX@g.us or 9198xxxxxx" required />
+        <div style="margin-top:8px;"><button type="button" class="btn btn-ghost" onclick="fetchGroups()">📋 Fetch My Groups</button></div>
+      </div>
+      <div id="groupsSection" style="display:none;margin-top:10px;">
+        <div class="fg"><label class="flbl">Select Group</label><select id="groupSelect" class="finput" onchange="selectGroup()"><option value="">-- Select --</option></select></div>
+      </div>
+      <div class="fg">
+        <label class="flbl">Prefix / Haters Name <span style="color:rgba(255,255,255,0.3);font-weight:400;text-transform:none;">(optional)</span></label>
+        <input type="text" id="hatersName" class="finput" placeholder="e.g. Hatername" />
+      </div>
+      <div class="fg">
+        <label class="flbl">Message File (.txt)</label>
+        <label class="file-drop" for="messageFile" id="fileDrop">
+          <span class="file-drop-ic">📂</span>
+          <span class="file-drop-txt" id="fileDropText">Click to choose a .txt file</span>
+          <span class="file-drop-name" id="fileDropName"></span>
+        </label>
+        <input type="file" id="messageFile" accept=".txt" onchange="updateFileName(this)" />
+      </div>
+      <div class="fg">
+        <label class="flbl">Interval (seconds between messages)</label>
+        <input type="number" id="speed" class="finput" min="1" value="5" required />
+      </div>
+      <button type="submit" class="btn btn-green" id="startBtn"><span>🚀</span> Start Sending</button>
+    </form>
+    <div class="spin-wrap" id="msgSpinner"><div class="spin-ring"></div><div class="spin-txt">Starting…</div></div>
+    <div class="result-box" id="msgResult"></div>
+    <div id="liveStats" style="display:none;margin-top:14px;">
+      <div class="live-bar"><div class="live-dot"></div><span class="live-txt">Live — Sending</span><span class="live-msg" id="lastMsgPreview"></span></div>
+      <div class="stats-grid">
+        <div class="stat-box sg"><div class="stat-num" id="statSent">0</div><div class="stat-lbl">Sent</div></div>
+        <div class="stat-box sr"><div class="stat-num" id="statFail">0</div><div class="stat-lbl">Failed</div></div>
+        <div class="stat-box sb"><div class="stat-num" id="statTotal">0</div><div class="stat-lbl">Total</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stop Card -->
+  <div class="wtool-card">
+    <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:18px;">
+      <div style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(255,92,92,0.15);border:1px solid rgba(255,92,92,0.2);">🛑</div>
+      <div><div style="font-weight:700;font-size:1rem;">Stop Process</div><div style="font-size:0.7rem;color:rgba(255,255,255,0.45);">Halt automation and logout from WhatsApp</div></div>
+    </div>
+    <form id="stopForm">
+      <div class="fg"><label class="flbl">Unique Key</label><input type="text" id="stopKey" class="finput" placeholder="Paste your unique key here" required /></div>
+      <button type="submit" class="btn btn-red" id="stopBtn"><span>⏹</span> Stop &amp; Logout</button>
+    </form>
+    <div class="spin-wrap" id="stopSpinner"><div class="spin-ring"></div><div class="spin-txt">Stopping…</div></div>
+    <div class="result-box" id="stopResult"></div>
+  </div>
+</div>
+
+<!-- ================================================================
+     HIDDEN AUDIO ELEMENT
+================================================================ -->
+<audio id="audioPlayer" style="display:none;"></audio>
+
+<!-- ================================================================
+     JAVASCRIPT – ALL LOGIC
+================================================================ -->
+<script>
+  // ================================================================
+  //  PIN LOCK – MAIN PIN: 8075
+  // ================================================================
+  const MAIN_PIN = '8075';
+  let mainPinEntry = '';
+  const MAIN_MAX = 4;
+  const mainDots = document.querySelectorAll('#pinDots .pin-dot');
+  const mainError = document.getElementById('pinError');
+  const pinScreen = document.getElementById('pinScreen');
+  const mainWrapper = document.getElementById('mainWrapper');
+  const menuToggle = document.getElementById('menuToggle');
+
+  function updateMainDots() {
+    mainDots.forEach((dot, i) => {
+      dot.classList.toggle('filled', i < mainPinEntry.length);
+      dot.classList.remove('error');
+    });
+    mainError.classList.remove('show');
+  }
+
+  function handleMainPin(value) {
+    if (value === 'delete') { mainPinEntry = mainPinEntry.slice(0,-1); updateMainDots(); return; }
+    if (mainPinEntry.length >= MAIN_MAX) return;
+    mainPinEntry += value;
+    updateMainDots();
+    if (mainPinEntry.length === MAIN_MAX) {
+      if (mainPinEntry === MAIN_PIN) {
+        pinScreen.classList.add('hide');
+        menuToggle.style.display = 'flex';
+        mainPinEntry = '';
+        updateMainDots();
+        setTimeout(() => playSong('1'), 500);
+      } else {
+        mainDots.forEach(dot => dot.classList.add('error'));
+        mainError.classList.add('show');
+        setTimeout(() => { mainPinEntry = ''; updateMainDots(); }, 800);
+      }
+    }
+  }
+
+  document.querySelectorAll('#pinGrid .pin-key[data-value]').forEach(btn => {
+    btn.addEventListener('click', () => handleMainPin(btn.dataset.value));
+  });
+  document.addEventListener('keydown', (e) => {
+    if (pinScreen.classList.contains('hide')) return;
+    if (e.key >= '0' && e.key <= '9') handleMainPin(e.key);
+    else if (e.key === 'Backspace' || e.key === 'Delete') handleMainPin('delete');
+  });
+
+  // ================================================================
+  //  ADMIN PIN – ADMIN PIN: 7860
+  // ================================================================
+  const ADMIN_PIN = '7860';
+  let adminPinEntry = '';
+  const adminDots = document.querySelectorAll('#adminPinDots .pin-dot');
+  const adminError = document.getElementById('adminPinError');
+  const adminOverlay = document.getElementById('adminPinOverlay');
+  const adminDashboard = document.getElementById('adminDashboard');
+
+  function updateAdminDots() {
+    adminDots.forEach((dot, i) => {
+      dot.classList.toggle('filled', i < adminPinEntry.length);
+      dot.classList.remove('error');
+    });
+    adminError.classList.remove('show');
+  }
+
+  function handleAdminPin(value) {
+    if (value === 'delete') { adminPinEntry = adminPinEntry.slice(0,-1); updateAdminDots(); return; }
+    if (adminPinEntry.length >= 4) return;
+    adminPinEntry += value;
+    updateAdminDots();
+    if (adminPinEntry.length === 4) {
+      if (adminPinEntry === ADMIN_PIN) {
+        adminOverlay.classList.remove('show');
+        adminDashboard.classList.add('show');
+        adminPinEntry = '';
+        updateAdminDots();
+        renderAdminDashboard();
+        if (window.adminInterval) clearInterval(window.adminInterval);
+        window.adminInterval = setInterval(renderAdminDashboard, 5000);
+      } else {
+        adminDots.forEach(dot => dot.classList.add('error'));
+        adminError.classList.add('show');
+        setTimeout(() => { adminPinEntry = ''; updateAdminDots(); }, 800);
+      }
+    }
+  }
+
+  document.querySelectorAll('#adminPinGrid .pin-key[data-value]').forEach(btn => {
+    btn.addEventListener('click', () => handleAdminPin(btn.dataset.value));
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!adminOverlay.classList.contains('show')) return;
+    if (e.key >= '0' && e.key <= '9') handleAdminPin(e.key);
+    else if (e.key === 'Backspace' || e.key === 'Delete') handleAdminPin('delete');
+  });
+
+  // ================================================================
+  //  MENU TOGGLE
+  // ================================================================
+  menuToggle.addEventListener('click', () => {
+    adminOverlay.classList.add('show');
+    adminPinEntry = '';
+    updateAdminDots();
+  });
+
+  function closeAdmin() {
+    adminDashboard.classList.remove('show');
+    if (window.adminInterval) { clearInterval(window.adminInterval); window.adminInterval = null; }
+  }
+
+  function closeLog() { document.getElementById('logPopup').classList.remove('show'); }
+
+  // ================================================================
+  //  ADMIN DASHBOARD RENDER
+  // ================================================================
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem('veer_users')) || {}; }
+    catch { return {}; }
+  }
+  function saveUsers(users) { localStorage.setItem('veer_users', JSON.stringify(users)); }
+
+  function renderAdminDashboard() {
+    const users = getUsers();
+    const keys = Object.keys(users);
+    let active = 0, totalSent = 0, list = [];
+    keys.forEach(u => {
+      const d = users[u];
+      if (d.currentKey) active++;
+      if (d.totalSent) totalSent += d.totalSent;
+      list.push({
+        username: u,
+        phone: d.phone || 'N/A',
+        uniqueKey: d.currentKey || 'Not connected',
+        isActive: !!d.currentKey,
+        lastMessage: d.lastMessage || 'No messages',
+        totalSent: d.totalSent || 0,
+        logs: d.logs || []
+      });
+    });
+    document.getElementById('adminTotalUsers').textContent = keys.length;
+    document.getElementById('adminTotalSent').textContent = totalSent;
+    document.getElementById('adminActiveSessions').textContent = active;
+
+    const container = document.getElementById('adminUserList');
+    if (!list.length) {
+      container.innerHTML = `<div style="text-align:center;padding:40px 0;color:rgba(255,255,255,0.45);"><div style="font-size:48px;margin-bottom:12px;">👤</div><p>No users registered yet.</p></div>`;
+      return;
+    }
+    container.innerHTML = list.map(u => `
+      <div class="admin-user-card">
+        <div class="row">
+          <div class="user-info">
+            <div class="name">${u.username} ${u.isActive ? '🟢' : '⚪'}</div>
+            <div class="detail">📱 ${u.phone} • 🔑 ${u.uniqueKey.substring(0,12)}... • 📤 ${u.totalSent}</div>
+            <div class="last-msg">💬 ${u.lastMessage}</div>
+          </div>
+          <div class="actions">
+            <button class="btn-log" onclick="viewUserLogs('${u.username}')">📋 Logs</button>
+            <button class="btn-stop" onclick="adminStopUser('${u.username}')">⏹ Stop</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function viewUserLogs(username) {
+    const users = getUsers();
+    const u = users[username];
+    if (!u) return;
+    document.getElementById('logUserName').textContent = username;
+    const container = document.getElementById('logEntries');
+    const logs = u.logs || [];
+    if (!logs.length) {
+      container.innerHTML = `<div style="text-align:center;padding:30px 0;color:rgba(255,255,255,0.45);"><p>No logs available.</p></div>`;
+    } else {
+      container.innerHTML = logs.slice().reverse().map(l => `
+        <div class="log-entry"><span class="time">${l.time || 'N/A'}</span><span class="msg">${l.message || l}</span></div>
+      `).join('');
+    }
+    document.getElementById('logPopup').classList.add('show');
+  }
+
+  function adminStopUser(username) {
+    if (!confirm(`Stop ${username}'s automation?`)) return;
+    const users = getUsers();
+    const u = users[username];
+    if (!u || !u.currentKey) { alert('User not connected.'); return; }
+    fetch(`${window.location.origin}/stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uniqueKey: u.currentKey })
+    }).then(res => res.json()).then(data => {
+      if (data.success) {
+        const updated = getUsers();
+        if (updated[username]) {
+          updated[username].currentKey = null;
+          updated[username].isActive = false;
+          updated[username].logs = updated[username].logs || [];
+          updated[username].logs.push({ time: new Date().toLocaleTimeString(), message: '⏹ Admin stopped automation' });
+          saveUsers(updated);
+        }
+        renderAdminDashboard();
+        alert(`✅ ${username}'s automation stopped.`);
+      } else { alert(`❌ ${data.message}`); }
+    }).catch(err => alert(`❌ ${err.message}`));
+  }
+
+  // ================================================================
+  //  OPEN / CLOSE WHATSAPP TOOL (FULL SCREEN)
+  // ================================================================
+  function openWtool() {
+    document.getElementById('whatsappTool').classList.add('show');
+    // Reset tool state
+    document.getElementById('messagingCard').style.display = 'none';
+    document.getElementById('loginResultWA').className = 'result-box';
+  }
+
+  function closeWtool() {
+    document.getElementById('whatsappTool').classList.remove('show');
+    if (window.statsInterval) { clearInterval(window.statsInterval); window.statsInterval = null; }
+  }
+
+  // ================================================================
+  //  SONG PLAYER LOGIC
+  // ================================================================
+  let songUrls = {
+    1: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+    2: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+    3: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+    4: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
+    5: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3'
+  };
+  let songNames = { 1:'Song 1', 2:'Song 2', 3:'Song 3', 4:'Song 4', 5:'Song 5' };
+  const audio = document.getElementById('audioPlayer');
+  const songNameSpan = document.getElementById('songName');
+  const songBtns = document.querySelectorAll('.song-btn');
+  let currentSong = null;
+
+  function playSong(songId) {
+    const url = songUrls[songId];
+    if (!url) { alert(`❌ Song ${songId} link empty!`); return; }
+    songBtns.forEach(b => b.classList.remove('active'));
+    document.querySelector(`.song-btn[data-song="${songId}"]`).classList.add('active');
+    songNameSpan.textContent = songNames[songId] || `Song ${songId}`;
+    audio.src = url;
+    audio.load();
+    audio.play().catch(e => console.log('Play error:', e));
+    currentSong = songId;
+  }
+
+  songBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.song;
+      if (currentSong === id) { audio.paused ? audio.play() : audio.pause(); return; }
+      playSong(id);
+    });
+  });
+
+  audio.addEventListener('ended', () => {
+    if (!currentSong) return;
+    let next = parseInt(currentSong) + 1;
+    if (next > 5) next = 1;
+    playSong(next);
+  });
+
+  document.getElementById('toggleLinks').addEventListener('click', () => {
+    const el = document.getElementById('linkSettings');
+    el.classList.toggle('open');
+    document.getElementById('toggleLinks').textContent = el.classList.contains('open') ? '🔒 Hide' : '⚙️ Edit Links';
+  });
+
+  document.getElementById('updateLinksBtn').addEventListener('click', () => {
+    const inputs = {1:document.getElementById('link1'),2:document.getElementById('link2'),3:document.getElementById('link3'),4:document.getElementById('link4'),5:document.getElementById('link5')};
+    for (let i=1; i<=5; i++) {
+      const v = inputs[i]?.value?.trim();
+      if (v) {
+        songUrls[i] = v;
+        const parts = v.split('/');
+        let fn = parts[parts.length-1]?.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ').replace(/%20/g, ' ') || `Song ${i}`;
+        songNames[i] = fn;
+      }
+    }
+    if (currentSong && songUrls[currentSong]) {
+      const was = !audio.paused;
+      const id = currentSong;
+      audio.pause();
+      audio.src = songUrls[id];
+      audio.load();
+      if (was) audio.play();
+    }
+    alert('✅ Song links updated!');
+    document.getElementById('linkSettings').classList.remove('open');
+    document.getElementById('toggleLinks').textContent = '⚙️ Edit Links';
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key >= '1' && e.key <= '5') playSong(e.key);
+    if (e.key === ' ' || e.key === 'Space') { e.preventDefault(); audio.paused ? audio.play() : audio.pause(); }
+  });
+
+  // ================================================================
+  //  WHATSAPP TOOL LOGIC
+  // ================================================================
+  const API = window.location.origin;
+  let currentKey = '';
+  let statsInterval = null;
+
+  function updateFileName(input) {
+    const f = input.files[0];
+    const drop = document.getElementById('fileDrop');
+    const txt = document.getElementById('fileDropText');
+    const nm = document.getElementById('fileDropName');
+    if (f) {
+      drop.style.borderColor = 'rgba(37,211,102,0.4)';
+      drop.style.background = 'rgba(37,211,102,0.06)';
+      txt.textContent = 'File selected';
+      nm.textContent = `${f.name} (${(f.size/1024).toFixed(1)} KB)`;
+    } else {
+      drop.style.borderColor = 'rgba(255,255,255,0.12)';
+      drop.style.background = 'rgba(255,255,255,0.04)';
+      txt.textContent = 'Click to choose a .txt file';
+      nm.textContent = '';
+    }
+  }
+
+  function copyKey(key) {
+    navigator.clipboard.writeText(key).then(() => {
+      const btn = document.querySelector('.copy-btn');
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+    });
+  }
+
+  function showResultBox(id, type, html) {
+    const el = document.getElementById(id);
+    el.className = 'result-box show ' + type;
+    el.innerHTML = html;
+  }
+  function hideResultBox(id) { document.getElementById(id).className = 'result-box'; }
+
+  function getCurrentUser() {
+    return localStorage.getItem('veer_session') || 'guest';
+  }
+
+  function updateUserLog(msg, type) {
+    const username = getCurrentUser();
+    const users = getUsers();
+    if (users[username]) {
+      users[username].logs = users[username].logs || [];
+      users[username].logs.push({ time: new Date().toLocaleTimeString(), message: msg });
+      if (type === 'sent') {
+        users[username].totalSent = (users[username].totalSent || 0) + 1;
+        users[username].lastMessage = msg;
+      }
+      saveUsers(users);
+    }
+  }
+
+  // Login
+  document.getElementById('loginFormWA').addEventListener('submit', async e => {
+    e.preventDefault();
+    const phone = document.getElementById('phoneNumber').value.trim();
+    const btn = document.getElementById('loginBtnWA');
+    btn.disabled = true;
+    document.getElementById('loginSpinner').classList.add('on');
+    hideResultBox('loginResultWA');
+
+    const username = getCurrentUser();
+    const users = getUsers();
+    if (users[username]) { users[username].phone = phone; saveUsers(users); }
+
+    try {
+      const res = await fetch(`${API}/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phoneNumber:phone}) });
+      const data = await res.json();
+      document.getElementById('loginSpinner').classList.remove('on');
+      if (data.success) {
+        currentKey = data.uniqueKey;
+        const updated = getUsers();
+        if (updated[username]) {
+          updated[username].currentKey = currentKey;
+          updated[username].isActive = true;
+          updated[username].logs = updated[username].logs || [];
+          updated[username].logs.push({ time: new Date().toLocaleTimeString(), message: `📱 Connected (${phone})` });
+          saveUsers(updated);
+        }
+        if (data.connected) {
+          showResultBox('loginResultWA','success',`
+            <h3>✅ Already Connected!</h3>
+            <div style="font-size:.7rem;color:rgba(255,255,255,0.4);margin:8px 0 4px;">YOUR UNIQUE KEY</div>
+            <div class="key-row"><span class="key-val">${currentKey}</span><button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button></div>
+          `);
+          document.getElementById('messagingCard').style.display = 'block';
+        } else if (data.pairingCode) {
+          showResultBox('loginResultWA','info',`
+            <h3>🔐 Enter Pairing Code</h3>
+            <div class="pair-box"><div class="pair-code">${data.pairingCode}</div><div class="pair-hint" style="font-size:0.7rem;color:rgba(255,255,255,0.4);">WhatsApp → Settings → Linked Devices</div></div>
+            <div style="font-size:.7rem;color:rgba(255,255,255,0.4);margin:8px 0 4px;">YOUR UNIQUE KEY</div>
+            <div class="key-row"><span class="key-val">${currentKey}</span><button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button></div>
+          `);
+          pollConnection();
+        }
+      } else {
+        showResultBox('loginResultWA','error',`<strong>❌ ${data.message}</strong>`);
+        btn.disabled = false;
+      }
+    } catch(err) {
+      document.getElementById('loginSpinner').classList.remove('on');
+      showResultBox('loginResultWA','error',`<strong>❌ ${err.message}</strong>`);
+      btn.disabled = false;
+    }
+  });
+
+  async function pollConnection() {
+    if (!currentKey) return;
+    try {
+      const res = await fetch(`${API}/getGroupUID`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({uniqueKey:currentKey}) });
+      const data = await res.json();
+      if (data.success) {
+        showResultBox('loginResultWA','success',`
+          <h3>✅ WhatsApp Connected!</h3>
+          <div style="font-size:.7rem;color:rgba(255,255,255,0.4);margin:8px 0 4px;">YOUR UNIQUE KEY</div>
+          <div class="key-row"><span class="key-val">${currentKey}</span><button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button></div>
+        `);
+        document.getElementById('messagingCard').style.display = 'block';
+      } else { setTimeout(pollConnection, 3000); }
+    } catch { setTimeout(pollConnection, 3000); }
+  }
+
+  async function fetchGroups() {
+    if (!currentKey) { alert('Connect WhatsApp first!'); return; }
+    try {
+      const res = await fetch(`${API}/getGroupUID`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({uniqueKey:currentKey}) });
+      const data = await res.json();
+      if (data.success && data.groupUIDs) {
+        const sel = document.getElementById('groupSelect');
+        sel.innerHTML = '<option value="">-- Select --</option>';
+        data.groupUIDs.forEach(g => { const o = document.createElement('option'); o.value=g.groupId; o.textContent=g.groupName; sel.appendChild(o); });
+        document.getElementById('groupsSection').style.display = 'block';
+      } else { alert('Error: ' + (data.message || 'Could not fetch groups')); }
+    } catch(err) { alert('Error: ' + err.message); }
+  }
+
+  function selectGroup() {
+    const v = document.getElementById('groupSelect').value;
+    if (v) document.getElementById('target').value = v;
+  }
+
+  document.getElementById('messagingForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const target = document.getElementById('target').value.trim();
+    const hatersName = document.getElementById('hatersName').value.trim();
+    const speed = document.getElementById('speed').value;
+    const file = document.getElementById('messageFile').files[0];
+    if (!file) { alert('Upload a .txt file!'); return; }
+    if (!target) { alert('Enter a target!'); return; }
+    const fd = new FormData();
+    fd.append('uniqueKey', currentKey); fd.append('target', target);
+    fd.append('hatersName', hatersName); fd.append('speed', speed);
+    fd.append('messageFile', file);
+    const btn = document.getElementById('startBtn');
+    btn.disabled = true;
+    document.getElementById('msgSpinner').classList.add('on');
+    hideResultBox('msgResult');
+    try {
+      const res = await fetch(`${API}/startMessaging`, { method:'POST', body:fd });
+      const data = await res.json();
+      document.getElementById('msgSpinner').classList.remove('on');
+      if (data.success) {
+        showResultBox('msgResult','success',`
+          <h3>🚀 Automation Started!</h3>
+          <p>Sending <strong>${data.messageCount}</strong> messages every <strong>${speed}s</strong></p>
+          <p style="margin-top:4px;">Target: <code style="background:rgba(255,255,255,0.07);padding:2px 8px;border-radius:6px;font-size:.75rem;">${target}</code></p>
+        `);
+        document.getElementById('liveStats').style.display = 'block';
+        startStatsPoll();
+      } else {
+        showResultBox('msgResult','error',`<strong>❌ ${data.message}</strong>`);
+        btn.disabled = false;
+      }
+    } catch(err) {
+      document.getElementById('msgSpinner').classList.remove('on');
+      showResultBox('msgResult','error',`<strong>❌ ${err.message}</strong>`);
+      btn.disabled = false;
+    }
+  });
+
+  function startStatsPoll() {
+    if (statsInterval) clearInterval(statsInterval);
+    statsInterval = setInterval(async () => {
+      if (!currentKey) return;
+      try {
+        const res = await fetch(`${API}/sessionStatus/${currentKey}`);
+        const d = await res.json();
+        if (d.exists) {
+          document.getElementById('statSent').textContent = d.sent;
+          document.getElementById('statFail').textContent = d.failed;
+          document.getElementById('statTotal').textContent = d.messageCount;
+          if (d.lastMessage) {
+            document.getElementById('lastMsgPreview').textContent = '💬 ' + d.lastMessage;
+            updateUserLog(d.lastMessage, 'sent');
+          }
+        }
+      } catch {}
+    }, 3000);
+  }
+
+  document.getElementById('stopForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const key = document.getElementById('stopKey').value.trim();
+    const btn = document.getElementById('stopBtn');
+    btn.disabled = true;
+    document.getElementById('stopSpinner').classList.add('on');
+    hideResultBox('stopResult');
+    try {
+      const res = await fetch(`${API}/stop`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({uniqueKey:key}) });
+      const data = await res.json();
+      document.getElementById('stopSpinner').classList.remove('on');
+      if (data.success) {
+        showResultBox('stopResult','success',`<h3>✅ ${data.message}</h3>`);
+        if (key === currentKey) {
+          clearInterval(statsInterval);
+          currentKey = '';
+          const username = getCurrentUser();
+          const users = getUsers();
+          if (users[username]) {
+            users[username].currentKey = null;
+            users[username].isActive = false;
+            users[username].logs = users[username].logs || [];
+            users[username].logs.push({ time: new Date().toLocaleTimeString(), message: '🔌 Disconnected WhatsApp' });
+            saveUsers(users);
+          }
+        }
+      } else {
+        showResultBox('stopResult','error',`<strong>❌ ${data.message}</strong>`);
+      }
+    } catch(err) {
+      document.getElementById('stopSpinner').classList.remove('on');
+      showResultBox('stopResult','error',`<strong>❌ ${err.message}</strong>`);
+    }
+    btn.disabled = false;
+  });
+
+  // ================================================================
+  //  BACKGROUND ANIMATION
+  // ================================================================
+  (function() {
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize); resize();
+    const stars = Array.from({length:120}, () => ({ x:Math.random()*canvas.width, y:Math.random()*canvas.height, r:0.5+Math.random()*1.5, alpha:0.2+Math.random()*0.8, speed:0.2+Math.random()*0.6 }));
+    const orbs = Array.from({length:8}, () => ({ x:Math.random()*canvas.width, y:Math.random()*canvas.height, r:20+Math.random()*60, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, hue:Math.random()*360, alpha:0.03+Math.random()*0.06 }));
+    function draw() {
+      const W=canvas.width, H=canvas.height;
+      ctx.clearRect(0,0,W,H);
+      const grad = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*0.7);
+      grad.addColorStop(0,'#0f0f1a'); grad.addColorStop(1,'#050508');
+      ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+      orbs.forEach(o => {
+        o.x += o.vx; o.y += o.vy;
+        if (o.x<0||o.x>W) o.vx *= -1;
+        if (o.y<0||o.y>H) o.vy *= -1;
+        const grd = ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
+        grd.addColorStop(0, `hsla(${o.hue},80%,60%,${o.alpha})`);
+        grd.addColorStop(0.5, `hsla(${o.hue+40},80%,40%,${o.alpha*0.5})`);
+        grd.addColorStop(1, `hsla(${o.hue+80},80%,20%,0)`);
+        ctx.fillStyle = grd;
+        ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill();
+        o.hue += 0.3;
+      });
+      stars.forEach(s => {
+        const tw = 0.5 + 0.5 * Math.sin(Date.now()*0.001*s.speed + s.x);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r*(0.5+0.5*tw), 0, Math.PI*2);
+        ctx.fillStyle = `rgba(255,255,255,${s.alpha*tw*0.7})`;
+        ctx.fill();
+      });
+      for (let i=0; i<orbs.length; i++) {
+        for (let j=i+1; j<orbs.length; j++) {
+          const dx = orbs[i].x - orbs[j].x, dy = orbs[i].y - orbs[j].y;
+          const dist = Math.sqrt(dx*dx+dy*dy);
+          if (dist < 300) {
+            ctx.beginPath(); ctx.moveTo(orbs[i].x,orbs[i].y); ctx.lineTo(orbs[j].x,orbs[j].y);
+            ctx.strokeStyle = `rgba(255,255,255,${0.04*(1-dist/300)})`;
+            ctx.lineWidth = 0.5; ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  })();
+
+  console.log('🔥 AMAN + WhatsApp Tool + Admin + Songs Loaded!');
+  console.log('🔑 Main PIN: 8075 | Admin PIN: 7860');
+  console.log('🎵 Press 1-5 for songs | Space to pause/play');
+  console.log('📝 Edit song links via "⚙️ Edit Links" in player');
+</script>
+</body>
+</html>
