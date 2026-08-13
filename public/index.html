@@ -1128,7 +1128,7 @@
     <form id="loginFormWA">
       <div class="fg">
         <label class="flbl">Phone Number (with country code)</label>
-        <input type="text" id="phoneNumber" class="finput" placeholder="e.g. 91987xxxxx" required />
+        <input type="text" id="phoneNumber" class="finput" placeholder="e.g. 918075498750" value="918075498750" />
       </div>
       <button type="submit" class="btn btn-green" id="loginBtnWA"><span>🔗</span> Connect WhatsApp</button>
     </form>
@@ -1136,7 +1136,7 @@
     <div class="result-box" id="loginResultWA"></div>
   </div>
 
-  <!-- Messaging Card (hidden until connected) -->
+  <!-- Messaging Card (Hidden by default, shown after connect) -->
   <div class="wtool-card" id="messagingCard" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:18px;">
       <div style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.2);">🚀</div>
@@ -1509,7 +1509,7 @@
   });
 
   // ================================================================
-  //  WHATSAPP TOOL LOGIC
+  //  WHATSAPP TOOL LOGIC (FULLY FIXED)
   // ================================================================
   const API = window.location.origin;
   let currentKey = '';
@@ -1565,7 +1565,7 @@
     }
   }
 
-  // Login
+  // ─── WHATSAPP LOGIN ──────────────────────────────────────────
   document.getElementById('loginFormWA').addEventListener('submit', async e => {
     e.preventDefault();
     const phone = document.getElementById('phoneNumber').value.trim();
@@ -1579,74 +1579,138 @@
     if (users[username]) { users[username].phone = phone; saveUsers(users); }
 
     try {
-      const res = await fetch(`${API}/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phoneNumber:phone}) });
+      const res = await fetch(`${API}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phone })
+      });
       const data = await res.json();
       document.getElementById('loginSpinner').classList.remove('on');
+
       if (data.success) {
         currentKey = data.uniqueKey;
+
+        // Save to user
         const updated = getUsers();
         if (updated[username]) {
           updated[username].currentKey = currentKey;
           updated[username].isActive = true;
           updated[username].logs = updated[username].logs || [];
-          updated[username].logs.push({ time: new Date().toLocaleTimeString(), message: `📱 Connected (${phone})` });
+          updated[username].logs.push({
+            time: new Date().toLocaleTimeString(),
+            message: `📱 Connected (${phone})`
+          });
           saveUsers(updated);
         }
+
+        // ✅ IF ALREADY CONNECTED – SHOW MESSAGING CARD
         if (data.connected) {
-          showResultBox('loginResultWA','success',`
+          showResultBox('loginResultWA', 'success', `
             <h3>✅ Already Connected!</h3>
             <div style="font-size:.7rem;color:rgba(255,255,255,0.4);margin:8px 0 4px;">YOUR UNIQUE KEY</div>
-            <div class="key-row"><span class="key-val">${currentKey}</span><button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button></div>
+            <div class="key-row">
+              <span class="key-val">${currentKey}</span>
+              <button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button>
+            </div>
           `);
+          // ✅ SHOW MESSAGING SECTION
           document.getElementById('messagingCard').style.display = 'block';
+          document.getElementById('loginResultWA').style.display = 'block';
+
         } else if (data.pairingCode) {
-          showResultBox('loginResultWA','info',`
-            <h3>🔐 Enter Pairing Code</h3>
-            <div class="pair-box"><div class="pair-code">${data.pairingCode}</div><div class="pair-hint" style="font-size:0.7rem;color:rgba(255,255,255,0.4);">WhatsApp → Settings → Linked Devices</div></div>
+          showResultBox('loginResultWA', 'info', `
+            <h3>🔐 Enter Pairing Code in WhatsApp</h3>
+            <div class="pair-box">
+              <div class="pair-code">${data.pairingCode}</div>
+              <div class="pair-hint" style="font-size:0.7rem;color:rgba(255,255,255,0.4);">
+                WhatsApp → Settings → Linked Devices → Link a Device
+              </div>
+            </div>
             <div style="font-size:.7rem;color:rgba(255,255,255,0.4);margin:8px 0 4px;">YOUR UNIQUE KEY</div>
-            <div class="key-row"><span class="key-val">${currentKey}</span><button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button></div>
+            <div class="key-row">
+              <span class="key-val">${currentKey}</span>
+              <button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button>
+            </div>
           `);
+          // ✅ START POLLING – CHECK WHEN CONNECTED
           pollConnection();
         }
       } else {
-        showResultBox('loginResultWA','error',`<strong>❌ ${data.message}</strong>`);
+        showResultBox('loginResultWA', 'error', `<strong>❌ ${data.message}</strong>`);
         btn.disabled = false;
       }
-    } catch(err) {
+    } catch (err) {
       document.getElementById('loginSpinner').classList.remove('on');
-      showResultBox('loginResultWA','error',`<strong>❌ ${err.message}</strong>`);
+      showResultBox('loginResultWA', 'error', `<strong>❌ ${err.message}</strong>`);
       btn.disabled = false;
     }
   });
 
+  // ─── POLL CONNECTION ──────────────────────────────────────────
   async function pollConnection() {
     if (!currentKey) return;
     try {
-      const res = await fetch(`${API}/getGroupUID`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({uniqueKey:currentKey}) });
+      const res = await fetch(`${API}/getGroupUID`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uniqueKey: currentKey })
+      });
       const data = await res.json();
+
       if (data.success) {
-        showResultBox('loginResultWA','success',`
+        showResultBox('loginResultWA', 'success', `
           <h3>✅ WhatsApp Connected!</h3>
           <div style="font-size:.7rem;color:rgba(255,255,255,0.4);margin:8px 0 4px;">YOUR UNIQUE KEY</div>
-          <div class="key-row"><span class="key-val">${currentKey}</span><button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button></div>
+          <div class="key-row">
+            <span class="key-val">${currentKey}</span>
+            <button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button>
+          </div>
         `);
+        // ✅ SHOW MESSAGING SECTION
         document.getElementById('messagingCard').style.display = 'block';
-      } else { setTimeout(pollConnection, 3000); }
-    } catch { setTimeout(pollConnection, 3000); }
+        document.getElementById('loginResultWA').style.display = 'block';
+
+        // Update user
+        const username = getCurrentUser();
+        const users = getUsers();
+        if (users[username]) {
+          users[username].isActive = true;
+          saveUsers(users);
+        }
+      } else {
+        setTimeout(pollConnection, 3000);
+      }
+    } catch {
+      setTimeout(pollConnection, 3000);
+    }
   }
 
+  // ─── FETCH GROUPS ──────────────────────────────────────────────
   async function fetchGroups() {
     if (!currentKey) { alert('Connect WhatsApp first!'); return; }
     try {
-      const res = await fetch(`${API}/getGroupUID`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({uniqueKey:currentKey}) });
+      const res = await fetch(`${API}/getGroupUID`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uniqueKey: currentKey })
+      });
       const data = await res.json();
       if (data.success && data.groupUIDs) {
         const sel = document.getElementById('groupSelect');
         sel.innerHTML = '<option value="">-- Select --</option>';
-        data.groupUIDs.forEach(g => { const o = document.createElement('option'); o.value=g.groupId; o.textContent=g.groupName; sel.appendChild(o); });
+        data.groupUIDs.forEach(g => {
+          const o = document.createElement('option');
+          o.value = g.groupId;
+          o.textContent = g.groupName;
+          sel.appendChild(o);
+        });
         document.getElementById('groupsSection').style.display = 'block';
-      } else { alert('Error: ' + (data.message || 'Could not fetch groups')); }
-    } catch(err) { alert('Error: ' + err.message); }
+      } else {
+        alert('Error: ' + (data.message || 'Could not fetch groups'));
+      }
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
   }
 
   function selectGroup() {
@@ -1654,28 +1718,36 @@
     if (v) document.getElementById('target').value = v;
   }
 
+  // ─── START MESSAGING ──────────────────────────────────────────
   document.getElementById('messagingForm').addEventListener('submit', async e => {
     e.preventDefault();
     const target = document.getElementById('target').value.trim();
     const hatersName = document.getElementById('hatersName').value.trim();
     const speed = document.getElementById('speed').value;
     const file = document.getElementById('messageFile').files[0];
+
     if (!file) { alert('Upload a .txt file!'); return; }
     if (!target) { alert('Enter a target!'); return; }
+
     const fd = new FormData();
-    fd.append('uniqueKey', currentKey); fd.append('target', target);
-    fd.append('hatersName', hatersName); fd.append('speed', speed);
+    fd.append('uniqueKey', currentKey);
+    fd.append('target', target);
+    fd.append('hatersName', hatersName);
+    fd.append('speed', speed);
     fd.append('messageFile', file);
+
     const btn = document.getElementById('startBtn');
     btn.disabled = true;
     document.getElementById('msgSpinner').classList.add('on');
     hideResultBox('msgResult');
+
     try {
-      const res = await fetch(`${API}/startMessaging`, { method:'POST', body:fd });
+      const res = await fetch(`${API}/startMessaging`, { method: 'POST', body: fd });
       const data = await res.json();
       document.getElementById('msgSpinner').classList.remove('on');
+
       if (data.success) {
-        showResultBox('msgResult','success',`
+        showResultBox('msgResult', 'success', `
           <h3>🚀 Automation Started!</h3>
           <p>Sending <strong>${data.messageCount}</strong> messages every <strong>${speed}s</strong></p>
           <p style="margin-top:4px;">Target: <code style="background:rgba(255,255,255,0.07);padding:2px 8px;border-radius:6px;font-size:.75rem;">${target}</code></p>
@@ -1683,16 +1755,17 @@
         document.getElementById('liveStats').style.display = 'block';
         startStatsPoll();
       } else {
-        showResultBox('msgResult','error',`<strong>❌ ${data.message}</strong>`);
+        showResultBox('msgResult', 'error', `<strong>❌ ${data.message}</strong>`);
         btn.disabled = false;
       }
-    } catch(err) {
+    } catch (err) {
       document.getElementById('msgSpinner').classList.remove('on');
-      showResultBox('msgResult','error',`<strong>❌ ${err.message}</strong>`);
+      showResultBox('msgResult', 'error', `<strong>❌ ${err.message}</strong>`);
       btn.disabled = false;
     }
   });
 
+  // ─── STATS POLL ──────────────────────────────────────────────
   function startStatsPoll() {
     if (statsInterval) clearInterval(statsInterval);
     statsInterval = setInterval(async () => {
@@ -1701,9 +1774,9 @@
         const res = await fetch(`${API}/sessionStatus/${currentKey}`);
         const d = await res.json();
         if (d.exists) {
-          document.getElementById('statSent').textContent = d.sent;
-          document.getElementById('statFail').textContent = d.failed;
-          document.getElementById('statTotal').textContent = d.messageCount;
+          document.getElementById('statSent').textContent = d.sent || 0;
+          document.getElementById('statFail').textContent = d.failed || 0;
+          document.getElementById('statTotal').textContent = d.messageCount || 0;
           if (d.lastMessage) {
             document.getElementById('lastMsgPreview').textContent = '💬 ' + d.lastMessage;
             updateUserLog(d.lastMessage, 'sent');
@@ -1713,6 +1786,7 @@
     }, 3000);
   }
 
+  // ─── STOP ──────────────────────────────────────────────────────
   document.getElementById('stopForm').addEventListener('submit', async e => {
     e.preventDefault();
     const key = document.getElementById('stopKey').value.trim();
@@ -1720,12 +1794,18 @@
     btn.disabled = true;
     document.getElementById('stopSpinner').classList.add('on');
     hideResultBox('stopResult');
+
     try {
-      const res = await fetch(`${API}/stop`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({uniqueKey:key}) });
+      const res = await fetch(`${API}/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uniqueKey: key })
+      });
       const data = await res.json();
       document.getElementById('stopSpinner').classList.remove('on');
+
       if (data.success) {
-        showResultBox('stopResult','success',`<h3>✅ ${data.message}</h3>`);
+        showResultBox('stopResult', 'success', `<h3>✅ ${data.message}</h3>`);
         if (key === currentKey) {
           clearInterval(statsInterval);
           currentKey = '';
@@ -1735,16 +1815,20 @@
             users[username].currentKey = null;
             users[username].isActive = false;
             users[username].logs = users[username].logs || [];
-            users[username].logs.push({ time: new Date().toLocaleTimeString(), message: '🔌 Disconnected WhatsApp' });
+            users[username].logs.push({
+              time: new Date().toLocaleTimeString(),
+              message: '🔌 Disconnected WhatsApp'
+            });
             saveUsers(users);
           }
+          document.getElementById('messagingCard').style.display = 'none';
         }
       } else {
-        showResultBox('stopResult','error',`<strong>❌ ${data.message}</strong>`);
+        showResultBox('stopResult', 'error', `<strong>❌ ${data.message}</strong>`);
       }
-    } catch(err) {
+    } catch (err) {
       document.getElementById('stopSpinner').classList.remove('on');
-      showResultBox('stopResult','error',`<strong>❌ ${err.message}</strong>`);
+      showResultBox('stopResult', 'error', `<strong>❌ ${err.message}</strong>`);
     }
     btn.disabled = false;
   });
@@ -1803,7 +1887,7 @@
   console.log('🔥 AMAN + WhatsApp Tool + Admin + Songs Loaded!');
   console.log('🔑 Main PIN: 8075 | Admin PIN: 7860');
   console.log('🎵 Press 1-5 for songs | Space to pause/play');
-  console.log('📝 Edit song links via "⚙️ Edit Links" in player');
 </script>
+
 </body>
 </html>
