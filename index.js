@@ -25,16 +25,9 @@ const upload = multer({ dest: 'uploads/' });
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+app.use(express.static('public'));  // ✅ IMPORTANT
 
-// ─── CONSTANTS ──────────────────────────────────────────────
 const SESSION_FILE = './running_sessions.json';
-const MAX_RECONNECT_ATTEMPTS = 999999; // Infinite retry
-const BASE_RECONNECT_DELAY = 2000;
-const MAX_RECONNECT_DELAY = 60000;
-const KEEP_ALIVE_INTERVAL = 25000;
-
-// ─── STATE STORE ──────────────────────────────────────────────
 const userSessions = {};
 const stopFlags = {};
 const activeSockets = {};
@@ -44,7 +37,6 @@ const sessionStats = {};
 const heartbeatIntervals = {};
 const lastActivity = {};
 
-// ─── FILE HELPERS ──────────────────────────────────────────────
 const saveSessions = () => {
   try {
     fs.writeFileSync(SESSION_FILE, JSON.stringify(userSessions, null, 2), 'utf8');
@@ -65,7 +57,6 @@ const generateUniqueKey = () => {
   return crypto.randomBytes(16).toString('hex');
 };
 
-// ─── CLEANUP ──────────────────────────────────────────────────
 const cleanupSession = (uniqueKey) => {
   if (stopFlags[uniqueKey]?.interval) {
     clearInterval(stopFlags[uniqueKey].interval);
@@ -81,7 +72,6 @@ const cleanupSession = (uniqueKey) => {
   delete lastActivity[uniqueKey];
 };
 
-// ─── HEARTBEAT – Keep session alive ──────────────────────────
 const startHeartbeat = (uniqueKey, socket) => {
   if (heartbeatIntervals[uniqueKey]) {
     clearInterval(heartbeatIntervals[uniqueKey]);
@@ -89,17 +79,13 @@ const startHeartbeat = (uniqueKey, socket) => {
   heartbeatIntervals[uniqueKey] = setInterval(async () => {
     try {
       if (socket && socket.user) {
-        // Send a ping to keep connection alive
         await socket.sendPresenceUpdate('available');
         lastActivity[uniqueKey] = Date.now();
       }
-    } catch (e) {
-      // Silent fail – will be handled by reconnection
-    }
-  }, KEEP_ALIVE_INTERVAL);
+    } catch (e) {}
+  }, 25000);
 };
 
-// ─── MESSAGING ENGINE ──────────────────────────────────────────
 const startMessaging = (socket, uniqueKey, target, hatersName, messages, speed) => {
   if (stopFlags[uniqueKey]?.interval) {
     clearInterval(stopFlags[uniqueKey].interval);
@@ -121,25 +107,17 @@ const startMessaging = (socket, uniqueKey, target, hatersName, messages, speed) 
   const intervalMs = parseInt(speed) * 1000;
 
   const sendNextMessage = async () => {
-    // Check if stopped
     if (stopFlags[uniqueKey]?.stopped) {
       clearInterval(stopFlags[uniqueKey].interval);
       delete messageQueues[uniqueKey];
       return;
     }
-
-    // Check socket
-    if (!activeSockets[uniqueKey]) {
-      console.log(chalk.yellow(`⚠️ Socket disconnected for ${uniqueKey}, waiting...`));
-      return;
-    }
-
+    if (!activeSockets[uniqueKey]) return;
     if (queue.isSending) return;
     if (queue.messages.length === 0) return;
 
     queue.isSending = true;
 
-    // Build chat ID
     let chatId;
     if (target.includes('@g.us') || target.includes('@s.whatsapp.net')) {
       chatId = target;
@@ -155,7 +133,7 @@ const startMessaging = (socket, uniqueKey, target, hatersName, messages, speed) 
       await socket.sendMessage(chatId, { text: formattedMessage });
       sessionStats[uniqueKey].sent++;
       sessionStats[uniqueKey].lastMessage = formattedMessage.substring(0, 60);
-      console.log(chalk.green(`✉️ [${sessionStats[uniqueKey].sent}] ${uniqueKey} → ${chatId}: ${formattedMessage.substring(0, 40)}...`));
+      console.log(chalk.green(`✉️ [${sessionStats[uniqueKey].sent}] ${uniqueKey} → ${chatId}`));
 
       queue.currentIndex++;
       if (queue.currentIndex >= queue.messages.length) {
@@ -165,10 +143,7 @@ const startMessaging = (socket, uniqueKey, target, hatersName, messages, speed) 
     } catch (err) {
       sessionStats[uniqueKey].failed++;
       console.error(chalk.red(`❌ Send failed [${uniqueKey}]: ${err.message}`));
-      
-      // If rate limited, slow down
       if (err.message?.includes('rate-overlimit')) {
-        console.log(chalk.yellow(`⏳ Rate limited! Slowing down for ${uniqueKey}`));
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     } finally {
@@ -176,17 +151,12 @@ const startMessaging = (socket, uniqueKey, target, hatersName, messages, speed) 
     }
   };
 
-  // Start interval
   const messageInterval = setInterval(sendNextMessage, intervalMs);
   stopFlags[uniqueKey] = { stopped: false, interval: messageInterval };
-  
-  // Send first message immediately
   setTimeout(sendNextMessage, 500);
-  
-  console.log(chalk.cyan(`📨 Messaging started! ${uniqueKey} → ${target} (${messages.length} msgs, ${speed}s interval)`));
+  console.log(chalk.cyan(`📨 Messaging started! ${uniqueKey} → ${target} (${messages.length} msgs, ${speed}s)`));
 };
 
-// ─── CONNECTION ENGINE ──────────────────────────────────────────
 const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) => {
   const sessionPath = `./session/${uniqueKey}`;
   let pairingCodeSent = false;
@@ -194,7 +164,7 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
 
   const startConnection = async () => {
     try {
-      console.log(chalk.magenta(`🚀 Connecting ${phoneNumber} [${uniqueKey}] (attempt ${reconnectCount + 1})`));
+      console.log(chalk.magenta(`🚀 Connecting ${phoneNumber} [${uniqueKey}]`));
 
       if (!fs.existsSync(sessionPath)) {
         fs.mkdirSync(sessionPath, { recursive: true });
@@ -226,7 +196,6 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
       activeSockets[uniqueKey] = socket;
       lastActivity[uniqueKey] = Date.now();
 
-      // ─── Pairing Code ──────────────────────────────────────
       if (!socket.authState.creds.registered && !pairingCodeSent && sendPairingCode) {
         await new Promise(resolve => setTimeout(resolve, 1500));
         try {
@@ -257,10 +226,8 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
         }
       }
 
-      // ─── Start Heartbeat ────────────────────────────────────
       startHeartbeat(uniqueKey, socket);
 
-      // ─── Event: Connection Update ──────────────────────────
       socket.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
 
@@ -283,7 +250,6 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
             sendPairingCode(null, true);
           }
 
-          // Resume messaging if needed
           if (userSessions[uniqueKey]?.messaging && userSessions[uniqueKey]?.messages) {
             const { target, hatersName, messages, speed } = userSessions[uniqueKey];
             console.log(chalk.cyan(`🔄 Resuming messaging for ${uniqueKey}...`));
@@ -297,7 +263,6 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
             startMessaging(socket, uniqueKey, target, hatersName, messages, speed);
           }
 
-          // Reset stop flag
           if (stopFlags[uniqueKey]) {
             stopFlags[uniqueKey].stopped = false;
           }
@@ -309,16 +274,8 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
 
           console.log(chalk.red(`⚠️ Connection closed [${uniqueKey}] - Status: ${statusCode}, Reason: ${reason}`));
 
-          // ─── Handle different disconnect reasons ──────────
-          if (reason === DisconnectReason.badSession) {
-            console.log(chalk.red(`Bad session, deleting and reconnecting... [${uniqueKey}]`));
-            removeDir(sessionPath);
-          } else if (reason === DisconnectReason.connectionReplaced) {
-            console.log(chalk.red(`Connection replaced, stopping... [${uniqueKey}]`));
-            cleanupSession(uniqueKey);
-            return;
-          } else if (reason === DisconnectReason.loggedOut) {
-            console.log(chalk.red(`Device logged out, stopping... [${uniqueKey}]`));
+          if (reason === DisconnectReason.badSession || reason === DisconnectReason.loggedOut || reason === 401 || statusCode === 401) {
+            console.log(chalk.red(`Session invalid, cleaning up... [${uniqueKey}]`));
             removeDir(sessionPath);
             cleanupSession(uniqueKey);
             if (userSessions[uniqueKey]) {
@@ -326,48 +283,18 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
               userSessions[uniqueKey].messaging = false;
               saveSessions();
             }
-            return;
-          } else if (reason === 401 || statusCode === 401) {
-            console.log(chalk.red(`Unauthorized (401), session expired, restarting... [${uniqueKey}]`));
-            removeDir(sessionPath);
-            cleanupSession(uniqueKey);
-            if (userSessions[uniqueKey]) {
-              userSessions[uniqueKey].connected = false;
-              userSessions[uniqueKey].messaging = false;
-              saveSessions();
-            }
-            // Attempt full restart
-            setTimeout(() => {
-              if (userSessions[uniqueKey]?.phoneNumber) {
-                connectAndLogin(userSessions[uniqueKey].phoneNumber, uniqueKey, null);
-              }
-            }, 5000);
             return;
           }
 
-          // ─── Auto-Reconnect (Infinite) ─────────────────────
           if (!stopFlags[uniqueKey]?.stopped) {
             reconnectCount++;
-            const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(1.5, reconnectCount), MAX_RECONNECT_DELAY);
-            console.log(chalk.yellow(`🔄 Reconnecting in ${(delay/1000).toFixed(1)}s... [${uniqueKey}] (Attempt ${reconnectCount})`));
-            
-            // Keep session alive in memory
-            if (userSessions[uniqueKey]) {
-              userSessions[uniqueKey].connected = false;
-              userSessions[uniqueKey].reconnecting = true;
-              saveSessions();
-            }
-
-            setTimeout(() => {
-              if (!stopFlags[uniqueKey]?.stopped) {
-                startConnection();
-              }
-            }, delay);
+            const delay = Math.min(2000 * Math.pow(1.5, reconnectCount), 60000);
+            console.log(chalk.yellow(`🔄 Reconnecting in ${(delay/1000).toFixed(1)}s... [${uniqueKey}]`));
+            setTimeout(() => startConnection(), delay);
           }
         }
       });
 
-      // ─── Event: Creds Update ──────────────────────────────
       socket.ev.on('creds.update', () => {
         saveCreds();
         if (userSessions[uniqueKey]) {
@@ -376,30 +303,23 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
         }
       });
 
-      // ─── Event: Messages Upsert ──────────────────────────
-      socket.ev.on('messages.upsert', (m) => {
-        // Keep connection alive
+      socket.ev.on('messages.upsert', () => {
         lastActivity[uniqueKey] = Date.now();
       });
 
-      // ─── Event: Presence Update ──────────────────────────
       socket.ev.on('presence.update', () => {
         lastActivity[uniqueKey] = Date.now();
       });
 
     } catch (error) {
       console.error(chalk.red(`❌ ERROR [${uniqueKey}]: ${error.message}`));
-      
       if (!pairingCodeSent && sendPairingCode) {
         pairingCodeSent = true;
         sendPairingCode(null, false, error.message);
       }
-
-      // Auto-retry on error
       if (!stopFlags[uniqueKey]?.stopped) {
         reconnectCount++;
-        const delay = Math.min(BASE_RECONNECT_DELAY * Math.pow(1.5, reconnectCount), MAX_RECONNECT_DELAY);
-        console.log(chalk.yellow(`🔄 Retrying in ${(delay/1000).toFixed(1)}s... [${uniqueKey}]`));
+        const delay = Math.min(2000 * Math.pow(1.5, reconnectCount), 60000);
         setTimeout(() => startConnection(), delay);
       }
     }
@@ -408,7 +328,6 @@ const connectAndLogin = async (phoneNumber, uniqueKey, sendPairingCode = null) =
   await startConnection();
 };
 
-// ─── RESTORE SESSIONS ON STARTUP ──────────────────────────────
 const restoreSessions = async () => {
   if (fs.existsSync(SESSION_FILE)) {
     try {
@@ -434,7 +353,6 @@ const restoreSessions = async () => {
               };
             }
 
-            // Restore connection
             await connectAndLogin(session.phoneNumber, session.uniqueKey, null);
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
@@ -449,22 +367,8 @@ const restoreSessions = async () => {
 
 // ─── PERIODIC SESSION SAVER ──────────────────────────────────
 setInterval(() => {
-  try {
-    saveSessions();
-  } catch (e) {}
+  try { saveSessions(); } catch (e) {}
 }, 30000);
-
-// ─── MEMORY CLEANUP ──────────────────────────────────────────
-setInterval(() => {
-  const now = Date.now();
-  for (const key of Object.keys(lastActivity)) {
-    // Cleanup inactive sessions (12 hours)
-    if (now - lastActivity[key] > 43200000 && !userSessions[key]?.messaging) {
-      console.log(chalk.yellow(`🧹 Cleaning inactive session: ${key}`));
-      cleanupSession(key);
-    }
-  }
-}, 3600000);
 
 // ================================================================
 //  ROUTES
@@ -503,15 +407,9 @@ app.post('/login', async (req, res) => {
 app.post('/getGroupUID', async (req, res) => {
   try {
     const { uniqueKey } = req.body;
-    if (!uniqueKey) {
-      return res.status(400).json({ success: false, message: 'Missing uniqueKey' });
-    }
-    if (!userSessions[uniqueKey]) {
-      return res.status(400).json({ success: false, message: 'No active session' });
-    }
-    if (!activeSockets[uniqueKey]) {
-      return res.status(400).json({ success: false, message: 'WhatsApp not connected' });
-    }
+    if (!uniqueKey) return res.status(400).json({ success: false, message: 'Missing uniqueKey' });
+    if (!userSessions[uniqueKey]) return res.status(400).json({ success: false, message: 'No active session' });
+    if (!activeSockets[uniqueKey]) return res.status(400).json({ success: false, message: 'WhatsApp not connected' });
 
     const socket = activeSockets[uniqueKey];
     await new Promise(resolve => setTimeout(resolve, 1000));
@@ -571,7 +469,6 @@ app.post('/startMessaging', upload.single('messageFile'), async (req, res) => {
     userSessions[uniqueKey].lastStartTime = new Date().toISOString();
     saveSessions();
 
-    // Reset queue
     delete messageQueues[uniqueKey];
     sessionStats[uniqueKey] = { sent: 0, failed: 0, lastMessage: '', startTime: Date.now() };
 
@@ -617,15 +514,10 @@ app.get('/sessionStatus/:uniqueKey', (req, res) => {
 
 app.post('/stop', async (req, res) => {
   const { uniqueKey } = req.body;
-  if (!uniqueKey) {
-    return res.status(400).json({ success: false, message: 'Missing uniqueKey' });
-  }
-  if (!userSessions[uniqueKey]) {
-    return res.status(400).json({ success: false, message: 'No session found' });
-  }
+  if (!uniqueKey) return res.status(400).json({ success: false, message: 'Missing uniqueKey' });
+  if (!userSessions[uniqueKey]) return res.status(400).json({ success: false, message: 'No session found' });
 
   try {
-    // Stop messaging
     if (stopFlags[uniqueKey]?.interval) {
       stopFlags[uniqueKey].stopped = true;
       clearInterval(stopFlags[uniqueKey].interval);
@@ -634,7 +526,6 @@ app.post('/stop', async (req, res) => {
     delete messageQueues[uniqueKey];
     delete sessionStats[uniqueKey];
 
-    // Logout socket
     if (activeSockets[uniqueKey]) {
       try {
         await activeSockets[uniqueKey].logout();
@@ -642,17 +533,14 @@ app.post('/stop', async (req, res) => {
       delete activeSockets[uniqueKey];
     }
 
-    // Cleanup heartbeat
     if (heartbeatIntervals[uniqueKey]) {
       clearInterval(heartbeatIntervals[uniqueKey]);
       delete heartbeatIntervals[uniqueKey];
     }
 
-    // Remove session folder
     const sessionPath = `./session/${uniqueKey}`;
     removeDir(sessionPath);
 
-    // Remove from memory
     delete userSessions[uniqueKey];
     delete lastActivity[uniqueKey];
     saveSessions();
@@ -665,20 +553,18 @@ app.post('/stop', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
+// ─── CATCH-ALL ROUTE (Must be LAST) ──────────────────────────
+app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ─── GLOBAL ERROR HANDLER ──────────────────────────────────────
+// ─── GLOBAL ERROR HANDLERS ──────────────────────────────────
 process.on('uncaughtException', (err) => {
   console.error(chalk.red(`🔥 Uncaught Exception: ${err.message}`));
-  console.error(err.stack);
-  // Don't exit – let the process continue
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason) => {
   console.error(chalk.red(`🔥 Unhandled Rejection: ${reason}`));
-  // Don't exit – let the process continue
 });
 
 // ─── START SERVER ──────────────────────────────────────────────
