@@ -1512,7 +1512,7 @@
   //  WHATSAPP TOOL LOGIC (FULLY FIXED)
   // ================================================================
   const API = window.location.origin;
-  let currentKey = '';
+  let currentKey = '';  // ✅ GLOBAL SESSION KEY
   let statsInterval = null;
 
   function updateFileName(input) {
@@ -1588,7 +1588,9 @@
       document.getElementById('loginSpinner').classList.remove('on');
 
       if (data.success) {
+        // ✅ SET GLOBAL SESSION KEY
         currentKey = data.uniqueKey;
+        console.log('✅ Session Key Set:', currentKey);
 
         // Save to user
         const updated = getUsers();
@@ -1603,7 +1605,7 @@
           saveUsers(updated);
         }
 
-        // ✅ IF ALREADY CONNECTED – SHOW MESSAGING CARD
+        // IF ALREADY CONNECTED – SHOW MESSAGING CARD
         if (data.connected) {
           showResultBox('loginResultWA', 'success', `
             <h3>✅ Already Connected!</h3>
@@ -1613,7 +1615,6 @@
               <button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button>
             </div>
           `);
-          // ✅ SHOW MESSAGING SECTION
           document.getElementById('messagingCard').style.display = 'block';
           document.getElementById('loginResultWA').style.display = 'block';
 
@@ -1632,7 +1633,7 @@
               <button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button>
             </div>
           `);
-          // ✅ START POLLING – CHECK WHEN CONNECTED
+          // START POLLING – CHECK WHEN CONNECTED
           pollConnection();
         }
       } else {
@@ -1666,7 +1667,6 @@
             <button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button>
           </div>
         `);
-        // ✅ SHOW MESSAGING SECTION
         document.getElementById('messagingCard').style.display = 'block';
         document.getElementById('loginResultWA').style.display = 'block';
 
@@ -1721,6 +1721,13 @@
   // ─── START MESSAGING ──────────────────────────────────────────
   document.getElementById('messagingForm').addEventListener('submit', async e => {
     e.preventDefault();
+
+    // ✅ CHECK SESSION KEY – FIXED
+    if (!currentKey || currentKey === '') {
+      alert('❌ Invalid session key! Please connect WhatsApp first.');
+      return;
+    }
+
     const target = document.getElementById('target').value.trim();
     const hatersName = document.getElementById('hatersName').value.trim();
     const speed = document.getElementById('speed').value;
