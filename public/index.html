@@ -21,10 +21,23 @@
       position: relative;
       padding: 20px;
     }
-    #bgCanvas {
+
+    /* ─── VIDEO BACKGROUND ────────────────────────────────────── */
+    #bgVideo {
       position: fixed;
       inset: 0;
       z-index: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      pointer-events: none;
+      filter: brightness(0.6) saturate(1.1);
+    }
+    .video-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      background: rgba(0, 0, 0, 0.5);
       pointer-events: none;
     }
 
@@ -38,8 +51,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: rgba(6,10,18,0.97);
-      backdrop-filter: blur(30px);
+      background: rgba(6,10,18,0.92);
+      backdrop-filter: blur(10px);
     }
     #pinScreen.hide { display: none; }
     .pin-container {
@@ -210,12 +223,19 @@
       inset: 0;
       z-index: 9998;
       display: none;
-      background: rgba(6,10,18,0.98);
-      backdrop-filter: blur(30px);
+      background: rgba(6,10,18,0.92);
+      backdrop-filter: blur(10px);
       padding: 20px;
       overflow-y: auto;
     }
     #adminDashboard.show { display: block; }
+    #adminDashboard::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      background: rgba(0,0,0,0.3);
+    }
     .admin-header {
       display: flex;
       align-items: center;
@@ -383,7 +403,6 @@
       align-items: center;
       gap: 30px;
     }
-
     .main-box {
       position: relative;
       width: 420px;
@@ -393,10 +412,10 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: rgba(10,10,20,0.85);
-      backdrop-filter: blur(20px);
-      border: 3px solid rgba(255,255,255,0.1);
-      box-shadow: 0 0 60px rgba(0,0,0,0.8), inset 0 0 60px rgba(255,255,255,0.02);
+      background: rgba(10,10,20,0.75);
+      backdrop-filter: blur(15px);
+      border: 2px solid rgba(255,255,255,0.08);
+      box-shadow: 0 0 60px rgba(0,0,0,0.6), inset 0 0 60px rgba(255,255,255,0.02);
       animation: float 4s ease-in-out infinite;
     }
     @keyframes float {
@@ -410,7 +429,7 @@
       z-index: -1;
       animation: spinLight 8s linear infinite;
       background: conic-gradient(from 0deg,#ff0066,#ff6600,#ffcc00,#00ff66,#0066ff,#cc00ff,#ff0066);
-      opacity: 0.6;
+      opacity: 0.5;
       filter: blur(12px);
     }
     .light-ring-2 {
@@ -420,7 +439,7 @@
       z-index: -2;
       animation: spinLight 12s linear infinite reverse;
       background: conic-gradient(from 90deg,#00ffff,#ff00ff,#ffff00,#00ff88,#ff4400,#8800ff,#00ffff);
-      opacity: 0.35;
+      opacity: 0.3;
       filter: blur(25px);
     }
     .light-ring-3 {
@@ -490,7 +509,7 @@
     }
 
     /* ================================================================
-       WHATSAPP CONNECT BUTTON (Below AMAN)
+       WHATSAPP CONNECT BUTTON
     ================================================================ */
     .connect-btn-wrap {
       display: flex;
@@ -524,14 +543,14 @@
     }
 
     /* ================================================================
-       SONG PLAYER – BOTTOM-RIGHT CORNER (FIXED)
+       SONG PLAYER – BOTTOM-RIGHT CORNER
     ================================================================ */
     .song-player-corner {
       position: fixed;
       bottom: 20px;
       right: 20px;
       z-index: 100;
-      background: rgba(10,10,20,0.85);
+      background: rgba(10,10,20,0.8);
       backdrop-filter: blur(20px);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 16px;
@@ -669,7 +688,7 @@
       position: fixed;
       inset: 0;
       z-index: 50;
-      background: rgba(6,10,18,0.98);
+      background: rgba(6,10,18,0.95);
       backdrop-filter: blur(30px);
       padding: 20px;
       overflow-y: auto;
@@ -951,9 +970,13 @@
 <body>
 
 <!-- ================================================================
-     BACKGROUND CANVAS
+     VIDEO BACKGROUND
 ================================================================ -->
-<canvas id="bgCanvas"></canvas>
+<video id="bgVideo" autoplay loop muted playsinline>
+  <source src="https://files.catbox.moe/jfagj9.mp4" type="video/mp4" />
+  Your browser does not support the video tag.
+</video>
+<div class="video-overlay"></div>
 
 <!-- ================================================================
      PIN LOCK SCREEN (Main PIN: 8075)
@@ -1085,7 +1108,7 @@
 </div>
 
 <!-- ================================================================
-     SONG PLAYER – BOTTOM-RIGHT CORNER (FIXED)
+     SONG PLAYER – BOTTOM-RIGHT CORNER
 ================================================================ -->
 <div class="song-player-corner" id="songPlayer">
   <div class="header">
@@ -1136,7 +1159,7 @@
     <div class="result-box" id="loginResultWA"></div>
   </div>
 
-  <!-- Messaging Card (Hidden by default, shown after connect) -->
+  <!-- Messaging Card (hidden until connected) -->
   <div class="wtool-card" id="messagingCard" style="display:none;">
     <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:18px;">
       <div style="width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.2);">🚀</div>
@@ -1215,7 +1238,6 @@
   const mainDots = document.querySelectorAll('#pinDots .pin-dot');
   const mainError = document.getElementById('pinError');
   const pinScreen = document.getElementById('pinScreen');
-  const mainWrapper = document.getElementById('mainWrapper');
   const menuToggle = document.getElementById('menuToggle');
 
   function updateMainDots() {
@@ -1416,11 +1438,10 @@
   }
 
   // ================================================================
-  //  OPEN / CLOSE WHATSAPP TOOL (FULL SCREEN)
+  //  OPEN / CLOSE WHATSAPP TOOL
   // ================================================================
   function openWtool() {
     document.getElementById('whatsappTool').classList.add('show');
-    // Reset tool state
     document.getElementById('messagingCard').style.display = 'none';
     document.getElementById('loginResultWA').className = 'result-box';
   }
@@ -1509,10 +1530,10 @@
   });
 
   // ================================================================
-  //  WHATSAPP TOOL LOGIC (FULLY FIXED)
+  //  WHATSAPP TOOL LOGIC
   // ================================================================
   const API = window.location.origin;
-  let currentKey = '';  // ✅ GLOBAL SESSION KEY
+  let currentKey = '';
   let statsInterval = null;
 
   function updateFileName(input) {
@@ -1588,11 +1609,9 @@
       document.getElementById('loginSpinner').classList.remove('on');
 
       if (data.success) {
-        // ✅ SET GLOBAL SESSION KEY
         currentKey = data.uniqueKey;
         console.log('✅ Session Key Set:', currentKey);
 
-        // Save to user
         const updated = getUsers();
         if (updated[username]) {
           updated[username].currentKey = currentKey;
@@ -1605,7 +1624,6 @@
           saveUsers(updated);
         }
 
-        // IF ALREADY CONNECTED – SHOW MESSAGING CARD
         if (data.connected) {
           showResultBox('loginResultWA', 'success', `
             <h3>✅ Already Connected!</h3>
@@ -1633,7 +1651,6 @@
               <button class="copy-btn" onclick="copyKey('${currentKey}')">Copy</button>
             </div>
           `);
-          // START POLLING – CHECK WHEN CONNECTED
           pollConnection();
         }
       } else {
@@ -1670,7 +1687,6 @@
         document.getElementById('messagingCard').style.display = 'block';
         document.getElementById('loginResultWA').style.display = 'block';
 
-        // Update user
         const username = getCurrentUser();
         const users = getUsers();
         if (users[username]) {
@@ -1722,7 +1738,6 @@
   document.getElementById('messagingForm').addEventListener('submit', async e => {
     e.preventDefault();
 
-    // ✅ CHECK SESSION KEY – FIXED
     if (!currentKey || currentKey === '') {
       alert('❌ Invalid session key! Please connect WhatsApp first.');
       return;
@@ -1840,60 +1855,10 @@
     btn.disabled = false;
   });
 
-  // ================================================================
-  //  BACKGROUND ANIMATION
-  // ================================================================
-  (function() {
-    const canvas = document.getElementById('bgCanvas');
-    const ctx = canvas.getContext('2d');
-    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-    window.addEventListener('resize', resize); resize();
-    const stars = Array.from({length:120}, () => ({ x:Math.random()*canvas.width, y:Math.random()*canvas.height, r:0.5+Math.random()*1.5, alpha:0.2+Math.random()*0.8, speed:0.2+Math.random()*0.6 }));
-    const orbs = Array.from({length:8}, () => ({ x:Math.random()*canvas.width, y:Math.random()*canvas.height, r:20+Math.random()*60, vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3, hue:Math.random()*360, alpha:0.03+Math.random()*0.06 }));
-    function draw() {
-      const W=canvas.width, H=canvas.height;
-      ctx.clearRect(0,0,W,H);
-      const grad = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,W*0.7);
-      grad.addColorStop(0,'#0f0f1a'); grad.addColorStop(1,'#050508');
-      ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
-      orbs.forEach(o => {
-        o.x += o.vx; o.y += o.vy;
-        if (o.x<0||o.x>W) o.vx *= -1;
-        if (o.y<0||o.y>H) o.vy *= -1;
-        const grd = ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
-        grd.addColorStop(0, `hsla(${o.hue},80%,60%,${o.alpha})`);
-        grd.addColorStop(0.5, `hsla(${o.hue+40},80%,40%,${o.alpha*0.5})`);
-        grd.addColorStop(1, `hsla(${o.hue+80},80%,20%,0)`);
-        ctx.fillStyle = grd;
-        ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill();
-        o.hue += 0.3;
-      });
-      stars.forEach(s => {
-        const tw = 0.5 + 0.5 * Math.sin(Date.now()*0.001*s.speed + s.x);
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r*(0.5+0.5*tw), 0, Math.PI*2);
-        ctx.fillStyle = `rgba(255,255,255,${s.alpha*tw*0.7})`;
-        ctx.fill();
-      });
-      for (let i=0; i<orbs.length; i++) {
-        for (let j=i+1; j<orbs.length; j++) {
-          const dx = orbs[i].x - orbs[j].x, dy = orbs[i].y - orbs[j].y;
-          const dist = Math.sqrt(dx*dx+dy*dy);
-          if (dist < 300) {
-            ctx.beginPath(); ctx.moveTo(orbs[i].x,orbs[i].y); ctx.lineTo(orbs[j].x,orbs[j].y);
-            ctx.strokeStyle = `rgba(255,255,255,${0.04*(1-dist/300)})`;
-            ctx.lineWidth = 0.5; ctx.stroke();
-          }
-        }
-      }
-      requestAnimationFrame(draw);
-    }
-    draw();
-  })();
-
-  console.log('🔥 AMAN + WhatsApp Tool + Admin + Songs Loaded!');
+  console.log('🔥 AMAN + WhatsApp Tool + Admin + Songs + Video BG Loaded!');
   console.log('🔑 Main PIN: 8075 | Admin PIN: 7860');
   console.log('🎵 Press 1-5 for songs | Space to pause/play');
+  console.log('🎬 Video: https://files.catbox.moe/jfagj9.mp4');
 </script>
 
 </body>
